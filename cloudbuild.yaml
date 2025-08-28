@@ -5,14 +5,13 @@
 substitutions:
   _REGION: us-central1
   _SERVICE: job-agent
-  _REPO: us-central1-docker.pkg.dev/$PROJECT_ID/containers
 
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "$_REPO/$_SERVICE:$COMMIT_SHA", "-f", "job-agent/Dockerfile", "job-agent"]
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA", "-f", "job-agent/Dockerfile", "job-agent"]
 
   - name: gcr.io/cloud-builders/docker
-    args: ["push", "$_REPO/$_SERVICE:$COMMIT_SHA"]
+    args: ["push", "gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA"]
 
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -20,7 +19,7 @@ steps:
       - run
       - deploy
       - $_SERVICE
-      - --image=$_REPO/$_SERVICE:$COMMIT_SHA
+      - --image=gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
       - --region=$_REGION
       - --platform=managed
       - --allow-unauthenticated
@@ -28,7 +27,7 @@ steps:
       - GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=$_REGION
 
 images:
-  - $_REPO/$_SERVICE:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/$_SERVICE:$COMMIT_SHA
 
 options:
   logging: CLOUD_LOGGING_ONLY
