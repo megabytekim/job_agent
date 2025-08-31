@@ -127,6 +127,7 @@ def main(host, port):
       }
 
       let isProcessing = false; // 중복 처리 방지 플래그
+      let isComposing = false; // IME 조합 상태 플래그
 
       async function send() {
         const text = input.value.trim();
@@ -153,10 +154,18 @@ def main(host, port):
       }
 
       btn.addEventListener('click', send);
+
+      // IME 조합 상태 처리 (한국어 등)
+      input.addEventListener('compositionstart', () => { isComposing = true; });
+      input.addEventListener('compositionend', () => { isComposing = false; });
       
       // Enter 키 이벤트 처리 개선
       input.addEventListener('keydown', (e) => { 
         if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.isComposing || isComposing) {
+            // IME 조합 중에는 전송하지 않음
+            return;
+          }
           e.preventDefault(); // 기본 Enter 동작 방지
           e.stopPropagation(); // 이벤트 전파 중단
           e.stopImmediatePropagation(); // 즉시 이벤트 중단

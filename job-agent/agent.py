@@ -102,6 +102,8 @@ class JobAgent:
 - 커리어/취업 조언 범위를 벗어난 주제에 대해서는 정중하게 커리어 관련 주제로 안내하세요
 - 전문성을 유지하면서도 친근하고 대화하기 쉬운 톤을 사용하세요
 - 한 번에 하나의 명확한 응답만 제공하세요
+ - 도구(web_search, search_jobs)를 실제로 호출하지 않는 이상 "검색 중입니다", "찾아보겠습니다" 등 외부 검색/조회 수행을 암시하는 표현을 사용하지 마세요
+ - 사용자가 LinkedIn(링크드인) 구직 검색을 요청하면, 현재 LinkedIn API 연동은 준비 중임을 명확히 알리고 대안을 제시하세요 (예: 역할/경력/지역을 기반으로 한 일반적 조언)
 """
     SUPPORTED_CONTENT_TYPES = ["text", "text/plain"]
 
@@ -110,6 +112,7 @@ class JobAgent:
             model="gemini-2.5-flash-lite",
             location=os.getenv("GOOGLE_CLOUD_LOCATION"),
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+            temperature=0,
         )
         # Base tools
         tool_list: List[Any] = [search_jobs]
@@ -179,6 +182,18 @@ class JobAgent:
         )
 
     def invoke(self, query, sessionId) -> str:
+        # Early handling: If the user explicitly asks for LinkedIn job search, respond deterministically
+        try:
+            linkedin_keywords = ["linkedin", "링크드인", "linkedin jobs", "linkedin에서", "linkedin으로"]
+            if any(k in str(query).lower() for k in linkedin_keywords):
+                return (
+                    "LinkedIn 구직 검색 기능은 현재 API 연동 준비 중입니다. "
+                    "원하시면 직무/경력/지역 정보를 기반으로 일반적인 구직 전략, 이력서/자기소개서 개선, 면접 준비 팁을 제공해 드릴게요."
+                )
+        except Exception:
+            # Fall through to normal handling if any error occurs in the guard
+            pass
+
         config = {"configurable": {"thread_id": sessionId}}
         
         # LangGraph invoke를 통해 응답 생성
