@@ -17,27 +17,28 @@ load_dotenv()
 memory = MemorySaver()
 
 
-class JobRecommendation(BaseModel):
-    job_id: str
-    title: str
-    company: str
-    location: str
-    salary_range: str
-    description: str
-    requirements: list[str]
+# LinkedIn API 연동 시 사용할 모델들 (향후 구현 예정)
+# class JobRecommendation(BaseModel):
+#     job_id: str
+#     title: str
+#     company: str
+#     location: str
+#     salary_range: str
+#     description: str
+#     requirements: list[str]
 
-
-class JobSearchResult(BaseModel):
-    search_id: str
-    query: str
-    recommendations: list[JobRecommendation]
-    total_found: int
+# class JobSearchResult(BaseModel):
+#     search_id: str
+#     query: str
+#     recommendations: list[JobRecommendation]
+#     total_found: int
 
 
 @tool
 def search_jobs(query: str, location: str = "Remote", experience_level: str = "Entry") -> str:
     """
-    Searches for job opportunities based on the given criteria.
+    Searches for job opportunities on LinkedIn based on the given criteria.
+    Note: LinkedIn API integration is planned for future implementation.
 
     Args:
         query: Job title or keywords to search for
@@ -45,49 +46,29 @@ def search_jobs(query: str, location: str = "Remote", experience_level: str = "E
         experience_level: Experience level (Entry, Mid, Senior)
 
     Returns:
-        str: A message with job search results and recommendations.
+        str: A message about LinkedIn job search functionality.
     """
     try:
-        search_id = str(uuid.uuid4())
+        # Check if user is asking for LinkedIn job search
+        linkedin_keywords = ["linkedin", "링크드인", "linkedin jobs", "linkedin에서", "linkedin으로"]
+        is_linkedin_request = any(keyword in query.lower() for keyword in linkedin_keywords)
         
-        # Mock job recommendations based on query
-        mock_jobs = [
-            JobRecommendation(
-                job_id=str(uuid.uuid4()),
-                title=f"{query} Developer",
-                company="Tech Corp",
-                location=location,
-                salary_range="$60K - $80K",
-                description=f"Looking for a {query} developer to join our team",
-                requirements=["Python", "JavaScript", "2+ years experience"]
-            ),
-            JobRecommendation(
-                job_id=str(uuid.uuid4()),
-                title=f"Senior {query} Engineer",
-                company="Innovation Inc",
-                location=location,
-                salary_range="$100K - $130K",
-                description=f"Senior role in {query} development",
-                requirements=["5+ years experience", "Leadership skills", "Advanced programming"]
+        if is_linkedin_request:
+            return (
+                f"LinkedIn에서 '{query}' 관련 구직 검색을 요청하셨군요! "
+                "현재 LinkedIn API 연동 기능은 개발 중이며, 곧 실제 LinkedIn 구직 정보를 검색할 수 있도록 업데이트될 예정입니다. "
+                "지금은 커리어 조언이나 이력서 작성 팁 등 다른 도움을 드릴 수 있습니다."
             )
-        ]
-        
-        result = JobSearchResult(
-            search_id=search_id,
-            query=query,
-            recommendations=mock_jobs,
-            total_found=len(mock_jobs)
-        )
-        
-        print("===")
-        print(f"Job search completed: {result}")
-        print("===")
-        
-        return f"Found {result.total_found} jobs for '{query}' in {location}. Search ID: {search_id}"
+        else:
+            return (
+                f"'{query}' 관련 구직 기회를 찾고 계시는군요! "
+                "현재 LinkedIn API 연동 기능은 개발 중이며, 곧 실제 구직 정보를 검색할 수 있도록 업데이트될 예정입니다. "
+                "지금은 커리어 조언, 이력서 작성 팁, 면접 준비 등 다른 도움을 드릴 수 있습니다."
+            )
         
     except Exception as e:
-        print(f"Error searching jobs: {e}")
-        return f"Error searching jobs: {e}"
+        print(f"Error in search_jobs: {e}")
+        return f"구직 검색 중 오류가 발생했습니다: {e}"
 
 
 class JobAgent:

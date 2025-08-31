@@ -133,7 +133,7 @@ def main(host, port):
         if (!text || isProcessing) return; // 이미 처리 중이면 무시
         
         isProcessing = true; // 처리 시작
-        input.value = '';
+        input.value = ''; // 즉시 input 비우기
         btn.disabled = true;
         addMsg(text, 'user');
         
@@ -153,12 +153,17 @@ def main(host, port):
       }
 
       btn.addEventListener('click', send);
+      
+      // Enter 키 이벤트 처리 개선
       input.addEventListener('keydown', (e) => { 
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault(); // 기본 Enter 동작 방지
+          e.stopPropagation(); // 이벤트 전파 중단
+          e.stopImmediatePropagation(); // 즉시 이벤트 중단
           send(); 
         }
       });
+      
       input.focus();
     </script>
   </body>
