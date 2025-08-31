@@ -154,6 +154,66 @@ demo.launch(server_name="0.0.0.0", server_port=8080)
 
 ## Project-Specific Modules
 
+### Job Agent (Standalone)
+The `job-agent/` package is a self-contained A2A-compatible service that exposes:
+- A2A Agent Card for discovery
+- A2A message endpoints for programmatic interaction
+- A simple built-in web chat UI at the service root for human testing
+
+Key files:
+- `job-agent/__main__.py`: A2A server entrypoint and web UI routes
+- `job-agent/agent.py`: LangGraph-based agent using Vertex AI `ChatVertexAI`
+- `job-agent/agent_executor.py`: Bridges A2A requests to the agent
+
+Dependencies (subset):
+- `a2a-sdk[http-server]`: A2A HTTP server (Starlette)
+- `langgraph`, `langchain-google-vertexai`: Agent + Gemini (Vertex AI)
+- `uvicorn`, `starlette`, `sse-starlette`: Web serving + streaming
+
+Endpoints exposed:
+- `GET /.well-known/agent.json`: A2A Agent Card (well-known discovery)
+- `POST /message/send`: A2A non-streaming message
+- `POST /message/stream`: A2A streaming message (SSE)
+- `GET /`: Minimal web chat UI (human testing)
+- `POST /chat`: Simple JSON chat endpoint used by the UI
+
+Code flow summary:
+1. `__main__.py` creates `AgentCard` and `A2AStarletteApplication` with `DefaultRequestHandler(JobAgentExecutor)`, then builds the Starlette `app`.
+2. The file mounts two extra routes for the web UI: `GET /` returns HTML; `POST /chat` calls the agent directly.
+3. `JobAgentExecutor.execute(...)` receives the user message from A2A, calls `JobAgent.invoke(...)`, then enqueues a completed task with a text artifact.
+4. `JobAgent` (LangGraph) constructs a ReAct agent with `ChatVertexAI(model="gemini-2.5-flash-lite")` and a `search_jobs` tool for career assistance. It runs, then returns the final message content.
+
+UX flow summary (web UI):
+1. User opens `GET /` (root). The page loads a minimal chat interface.
+2. On send, the browser posts JSON to `POST /chat` with `{ text, contextId }`.
+3. The server calls `JobAgent.invoke(text, contextId)` and returns `{ reply }`.
+4. The UI appends user and agent bubbles; errors are shown inline if the call fails.
+
+Environment variables:
+- `GOOGLE_CLOUD_PROJECT` (required)
+- `GOOGLE_CLOUD_LOCATION` (e.g., `us-central1`) (required)
+- `HOST_OVERRIDE` (optional; used to publish external URL in the Agent Card, e.g., Cloud Run URL)
+
+Local run pattern:
+```bash
+cd job-agent
+uv sync
+uv run . --host 0.0.0.0 --port 8080
+# Open http://localhost:8080
+```
+
+Cloud Run deployment (example):
+```bash
+gcloud run deploy job-agent \
+  --source ./job-agent \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=us-central1
+
+URL=$(gcloud run services describe job-agent --region us-central1 --format='value(status.url)')
+gcloud run services update job-agent --region us-central1 --update-env-vars HOST_OVERRIDE=$URL
+```
+
 ### `purchasing_concierge/purchasing_agent.py`
 Main orchestrating agent that coordinates remote seller agents.
 

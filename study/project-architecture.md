@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project implements a **multi-agent purchasing system** using the **Agent-to-Agent (A2A) protocol**. It consists of a central purchasing concierge that coordinates with multiple remote seller agents (pizza, burger, job agents) to fulfill user requests.
+This repository also includes a standalone `job-agent/` service implementing the **Agent-to-Agent (A2A) protocol**. The `job-agent/` component can operate independently of the purchasing concierge and exposes both A2A endpoints and a human-friendly chat UI.
 
 ## Key Technologies
 
@@ -27,7 +27,7 @@ purchasing-concierge-a2a/
 │   ├── purchasing_agent.py           # Core orchestrating logic
 │   ├── remote_agent_connection.py    # A2A client wrapper
 │   └── README.md                     # Empty
-└── remote_seller_agents/             # Independent A2A server agents
+└── remote_seller_agents/             # Independent A2A server agents (reference)
     ├── pizza_agent/                  # LangGraph-based pizza seller
     │   ├── __main__.py               # A2A server entry point
     │   ├── agent.py                  # Pizza agent implementation
@@ -47,21 +47,15 @@ purchasing-concierge-a2a/
         └── Dockerfile                # Container definition
 ```
 
-## Architecture Diagram
+## Architecture Diagram (job-agent focus)
 
 ```mermaid
 graph TB
     User[👤 User] --> UI[🌐 Gradio UI]
     User --> CLI[💻 CLI/API]
     
-    UI --> AE[☁️ Agent Engine<br/>Purchasing Concierge]
-    CLI --> AE
-    
-    AE --> PA[🎯 Purchasing Agent<br/>ADK + A2A Client]
-    
-    PA --> |A2A Protocol| Pizza[🍕 Pizza Agent<br/>LangGraph + A2A Server<br/>Cloud Run]
-    PA --> |A2A Protocol| Burger[🍔 Burger Agent<br/>CrewAI + A2A Server<br/>Cloud Run]
-    PA --> |A2A Protocol| Job[💼 Job Agent<br/>LangGraph + A2A Server<br/>Cloud Run]
+    UI --> JA[💼 Job Agent<br/>LangGraph + A2A Server<br/>Cloud Run]
+    CLI --> JA
     
     Pizza --> |Tool Call| PizzaOrder[📦 create_pizza_order]
     Burger --> |Tool Call| BurgerOrder[📦 create_burger_order]
@@ -80,7 +74,7 @@ graph TB
     end
 ```
 
-## Code Flow Analysis
+## Code Flow Analysis (job-agent)
 
 ### 1. Deployment Flow
 
@@ -101,7 +95,7 @@ remote_app = agent_engines.create(
 )
 ```
 
-#### B. Remote Agent Deployment (Individual Sellers)
+#### B. Job Agent Deployment
 ```bash
 # Each agent deployed separately to Cloud Run
 cd remote_seller_agents/pizza_agent
@@ -114,9 +108,16 @@ cd ../job_agent
 gcloud run deploy job-agent --source . --allow-unauthenticated
 ```
 
-### 2. Runtime Flow
+### 2. Runtime Flow (job-agent)
 
-#### A. User Interaction via Gradio UI
+#### A. User Interaction via Built-in Web UI
+```text
+1) Browser GET / (root) loads minimal chat page
+2) User types a message and clicks Send
+3) Browser POST /chat with { text, contextId }
+4) Server calls JobAgent.invoke(text, contextId)
+5) Response { reply } returned and rendered as assistant bubble
+```
 ```python
 # purchasing_concierge_ui.py
 async def get_response_from_agent(message: str, history: List[Dict[str, Any]]) -> str:
@@ -134,7 +135,19 @@ async def get_response_from_agent(message: str, history: List[Dict[str, Any]]) -
         # Return formatted responses
 ```
 
-#### B. Purchasing Agent Orchestration
+#### B. A2A Client Interaction (Programmatic)
+```python
+from a2a.client import A2ACardResolver, A2AClient
+from a2a.types import SendMessageRequest, MessageSendParams
+
+resolver = A2ACardResolver(base_url=JOB_AGENT_URL, httpx_client=client)
+card = await resolver.get_agent_card()
+client = A2AClient(httpx_client=client, card=card, url=card.url)
+
+payload = {"message": {"role": "user", "parts": [{"type": "text", "text": "Hello"}], "messageId": mid, "contextId": ctx}}
+request = SendMessageRequest(id=mid, params=MessageSendParams.model_validate(payload))
+resp = await client.send_message(request)
+```
 ```python
 # purchasing_concierge/purchasing_agent.py
 class PurchasingAgent:
@@ -165,7 +178,7 @@ class PurchasingAgent:
         return send_response.root.result
 ```
 
-#### C. Remote Agent Processing
+#### C. Remote Agent Processing (A2A Executor)
 ```python
 # remote_seller_agents/*/agent_executor.py (Common Pattern)
 class [Agent]Executor(AgentExecutor):
@@ -182,7 +195,7 @@ class [Agent]Executor(AgentExecutor):
         )
 ```
 
-#### D. A2A Server Setup (Each Remote Agent)
+#### D. A2A Server Setup (Job Agent)
 ```python
 # remote_seller_agents/*/__main__.py (Common Pattern)
 def main(host, port):
@@ -212,7 +225,58 @@ def main(host, port):
     uvicorn.run(server.build(), host=host, port=port)
 ```
 
-### 3. Agent Implementation Patterns
+### 3. Agent Implementation (job-agent)
+```python
+# job-agent/agent.py
+class JobAgent:
+    def __init__(self):
+        self.model = ChatVertexAI(model="gemini-2.5-flash-lite", project=os.getenv("GOOGLE_CLOUD_PROJECT"), location=os.getenv("GOOGLE_CLOUD_LOCATION"))
+        self.tools = [search_jobs]  # Job search tool
+        self.graph = create_react_agent(self.model, tools=self.tools, checkpointer=memory, prompt=self.SYSTEM_INSTRUCTION)
+
+    def invoke(self, query, sessionId) -> str:
+        config = {"configurable": {"thread_id": sessionId}}
+        self.graph.invoke({"messages": [("user", query)]}, config)
+        return self.get_agent_response(config)
+```
+
+### 4. UX Flow (job-agent web UI)
+```text
+Page load:
+  - GET / serves static HTML (inline styles + script)
+  - Script initializes contextId and binds click/Enter handlers
+
+Sending a message:
+  - Adds user bubble immediately
+  - POST /chat with { text, contextId }
+  - On success: appends agent bubble with reply
+  - On error: appends inline error bubble
+```
+
+### 5. Configuration (job-agent)
+Environment variables:
+- `GOOGLE_CLOUD_PROJECT` (required)
+- `GOOGLE_CLOUD_LOCATION` (required, e.g., `us-central1`)
+- `HOST_OVERRIDE` (optional; publish external URL in Agent Card)
+
+Local run:
+```bash
+cd job-agent
+uv sync
+uv run . --host 0.0.0.0 --port 8080
+```
+
+Cloud Run deploy:
+```bash
+gcloud run deploy job-agent \
+  --source ./job-agent \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=us-central1
+
+URL=$(gcloud run services describe job-agent --region us-central1 --format='value(status.url)')
+gcloud run services update job-agent --region us-central1 --update-env-vars HOST_OVERRIDE=$URL
+```
 
 #### A. LangGraph Pattern (Pizza & Job Agents)
 ```python

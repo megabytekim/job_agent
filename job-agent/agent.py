@@ -10,73 +10,116 @@ from pydantic import BaseModel
 import uuid
 from dotenv import load_dotenv
 import os
+from typing import Any, List
 
 load_dotenv()
 
 memory = MemorySaver()
 
 
-class OrderItem(BaseModel):
-    name: str
-    quantity: int
-    price: int
+class JobRecommendation(BaseModel):
+    job_id: str
+    title: str
+    company: str
+    location: str
+    salary_range: str
+    description: str
+    requirements: list[str]
 
 
-class Order(BaseModel):
-    order_id: str
-    status: str
-    order_items: list[OrderItem]
+class JobSearchResult(BaseModel):
+    search_id: str
+    query: str
+    recommendations: list[JobRecommendation]
+    total_found: int
 
 
 @tool
-def create_pizza_order(order_items: list[OrderItem]) -> str:
+def search_jobs(query: str, location: str = "Remote", experience_level: str = "Entry") -> str:
     """
-    Creates a new pizza order with the given order items.
+    Searches for job opportunities based on the given criteria.
 
     Args:
-        order_items: List of order items to be added to the order.
+        query: Job title or keywords to search for
+        location: Preferred location (default: Remote)
+        experience_level: Experience level (Entry, Mid, Senior)
 
     Returns:
-        str: A message indicating that the order has been created.
+        str: A message with job search results and recommendations.
     """
     try:
-        order_id = str(uuid.uuid4())
-        order = Order(order_id=order_id, status="created", order_items=order_items)
+        search_id = str(uuid.uuid4())
+        
+        # Mock job recommendations based on query
+        mock_jobs = [
+            JobRecommendation(
+                job_id=str(uuid.uuid4()),
+                title=f"{query} Developer",
+                company="Tech Corp",
+                location=location,
+                salary_range="$60K - $80K",
+                description=f"Looking for a {query} developer to join our team",
+                requirements=["Python", "JavaScript", "2+ years experience"]
+            ),
+            JobRecommendation(
+                job_id=str(uuid.uuid4()),
+                title=f"Senior {query} Engineer",
+                company="Innovation Inc",
+                location=location,
+                salary_range="$100K - $130K",
+                description=f"Senior role in {query} development",
+                requirements=["5+ years experience", "Leadership skills", "Advanced programming"]
+            )
+        ]
+        
+        result = JobSearchResult(
+            search_id=search_id,
+            query=query,
+            recommendations=mock_jobs,
+            total_found=len(mock_jobs)
+        )
+        
         print("===")
-        print(f"order created: {order}")
+        print(f"Job search completed: {result}")
         print("===")
+        
+        return f"Found {result.total_found} jobs for '{query}' in {location}. Search ID: {search_id}"
+        
     except Exception as e:
-        print(f"Error creating order: {e}")
-        return f"Error creating order: {e}"
-    return f"Order {order.model_dump()} has been created"
+        print(f"Error searching jobs: {e}")
+        return f"Error searching jobs: {e}"
 
 
 class JobAgent:
     SYSTEM_INSTRUCTION = """
 # INSTRUCTIONS
 
-You are a specialized assistant for a pizza store.
-Your sole purpose is to answer questions about what is available on pizza menu and price also handle order creation.
-If the user asks about anything other than pizza menu or order creation, politely state that you cannot help with that topic and can only assist with pizza menu and order creation.
-Do not attempt to answer unrelated questions or use tools for other purposes.
+You are a specialized career and job search assistant.
+Your purpose is to help users with career advice, job searching, resume tips, interview preparation, and professional development.
+You can provide guidance on various career-related topics and help users find job opportunities.
 
 # CONTEXT
 
-Provided below is the available pizza menu and it's related price:
-- Margherita Pizza: IDR 100K
-- Pepperoni Pizza: IDR 140K
-- Hawaiian Pizza: IDR 110K
-- Veggie Pizza: IDR 100K
-- BBQ Chicken Pizza: IDR 130K
+You can assist with:
+- Job search strategies and techniques
+- Resume writing and optimization
+- Interview preparation and tips
+- Career path guidance
+- Salary negotiation advice
+- Professional development planning
+- Industry insights and trends
+- Networking strategies
 
 # RULES
 
-- If user want to do something, you will be following this order:
-    1. Always ensure the user already confirmed the order and total price. This confirmation may already given in the user query.
-    2. Use `create_pizza_order` tool to create the order
-    3. Finally, always provide response to the user about the detailed ordered items, price breakdown and total, and order ID
-
-- DO NOT make up menu or price, Always rely on the provided menu given to you as context.
+- Be professional, encouraging, and supportive in your responses
+- Provide practical, actionable advice
+- When users ask about specific job searches, use the `search_jobs` tool to find relevant opportunities
+- For general web searches related to career topics, use the `web_search` tool to get current information
+- Always consider the user's experience level and career goals
+- Provide personalized recommendations based on their situation
+- If users ask about topics outside of career/job advice, politely redirect them to career-related topics
+- Use a friendly, conversational tone while maintaining professionalism
 """
     SUPPORTED_CONTENT_TYPES = ["text", "text/plain"]
 
@@ -86,7 +129,66 @@ Provided below is the available pizza menu and it's related price:
             location=os.getenv("GOOGLE_CLOUD_LOCATION"),
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
         )
-        self.tools = [create_pizza_order]
+        # Base tools
+        tool_list: List[Any] = [search_jobs]
+
+        # Optionally load MCP tools from local web_search_server (no API key required)
+        # Since MCP client loading is async and complex, add direct web_search tool for now
+        try:
+            print("🔍 Adding web search tool...")
+            # Import the web search functionality directly
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            server_path = os.path.join(current_dir, "web_search_server.py")
+            print(f"📁 MCP server path: {server_path}")
+            print(f"📄 Server exists: {os.path.exists(server_path)}")
+            
+            if os.path.exists(server_path):
+                # Import duckduckgo search function directly
+                try:
+                    from ddgs import DDGS
+                    import json
+
+                    @tool
+                    def web_search(query: str, count: int = 5) -> str:
+                        """Perform a web search and return top results.
+
+                        Args:
+                            query: Search query string
+                            count: Number of results to return (default 5)
+
+                        Returns:
+                            String containing search results with titles and descriptions
+                        """
+                        try:
+                            results = []
+                            with DDGS() as ddgs:
+                                for r in ddgs.text(query, max_results=count):
+                                    results.append({
+                                        "title": r.get("title"),
+                                        "href": r.get("href"),
+                                        "body": r.get("body"),
+                                    })
+                            
+                            # Format results for better readability
+                            formatted = []
+                            for i, result in enumerate(results, 1):
+                                formatted.append(f"{i}. {result['title']}\n   URL: {result['href']}\n   Summary: {result['body'][:200]}...")
+                            
+                            return "\n\n".join(formatted)
+                        except Exception as e:
+                            return f"Search failed: {e}"
+
+                    tool_list.append(web_search)
+                    print("✅ Added direct web_search tool")
+                except ImportError:
+                    print("⚠️ ddgs package not available, skipping web search")
+        except Exception as e:
+            # If MCP libs are not available, proceed with built-in tools only
+            print(f"❌ Web search tool loading failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        self.tools = tool_list
         self.graph = create_react_agent(
             self.model,
             tools=self.tools,
