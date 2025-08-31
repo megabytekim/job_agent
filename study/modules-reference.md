@@ -1,29 +1,29 @@
-# Modules Reference Guide
+# 모듈 참조 가이드
 
-## Core Dependencies
+## 핵심 의존성
 
 ### A2A SDK (`a2a-sdk>=0.2.16`)
-The Agent-to-Agent protocol implementation for inter-agent communication.
+에이전트 간 통신을 위한 Agent-to-Agent 프로토콜 구현체입니다.
 
-**Key Classes:**
-- `A2ACardResolver`: Discovers agent capabilities from endpoint
-- `A2AClient`: Client for sending messages to A2A agents  
-- `A2AStarletteApplication`: HTTP server implementing A2A protocol
-- `DefaultRequestHandler`: Routes A2A requests to agent executors
-- `AgentCard`: Metadata describing agent capabilities
-- `SendMessageRequest`/`SendMessageResponse`: A2A message types
-- `MessageSendParams`: Message parameters
-- `Task`, `TaskArtifactUpdateEvent`, `TaskStatusUpdateEvent`: Task types
+**주요 클래스:**
+- `A2ACardResolver`: 엔드포인트에서 에이전트 기능을 발견합니다
+- `A2AClient`: A2A 에이전트에 메시지를 보내는 클라이언트
+- `A2AStarletteApplication`: A2A 프로토콜을 구현하는 HTTP 서버
+- `DefaultRequestHandler`: A2A 요청을 에이전트 실행자로 라우팅합니다
+- `AgentCard`: 에이전트 기능을 설명하는 메타데이터
+- `SendMessageRequest`/`SendMessageResponse`: A2A 메시지 타입
+- `MessageSendParams`: 메시지 매개변수
+- `Task`, `TaskArtifactUpdateEvent`, `TaskStatusUpdateEvent`: 작업 타입
 
-**Usage Pattern:**
+**사용 패턴:**
 ```python
-# Client side (purchasing agent)
+# 클라이언트 측 (purchasing agent)
 resolver = A2ACardResolver(base_url=agent_url, httpx_client=client)
 card = await resolver.get_agent_card()
 a2a_client = A2AClient(httpx_client, card, url=card.url)
 response = await a2a_client.send_message(request)
 
-# Server side (remote agents)  
+# 서버 측 (remote agents)  
 server = A2AStarletteApplication(agent_card=card, http_handler=handler)
 uvicorn.run(server.build(), host=host, port=port)
 ```
@@ -53,15 +53,15 @@ agent = Agent(
 )
 ```
 
-### LangGraph (Pizza & Job Agents)
-Framework for building stateful, multi-step applications with LLMs.
+### LangGraph (Job Agent)
+LLM과 함께 상태 유지, 다단계 애플리케이션을 구축하기 위한 프레임워크입니다.
 
-**Key Components:**
-- `create_react_agent`: Creates ReAct pattern agent
-- `MemorySaver`: Checkpointing for conversation memory
-- `ChatVertexAI`: Vertex AI LLM integration
+**주요 구성 요소:**
+- `create_react_agent`: ReAct 패턴 에이전트를 생성합니다
+- `MemorySaver`: 대화 메모리를 위한 체크포인팅
+- `ChatVertexAI`: Vertex AI LLM 통합
 
-**Usage Pattern:**
+**사용 패턴:**
 ```python
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -75,40 +75,42 @@ config = {"configurable": {"thread_id": session_id}}
 graph.invoke({"messages": [("user", query)]}, config)
 ```
 
-### CrewAI (Burger Agent)
-Multi-agent orchestration framework.
+### FastMCP (MCP 서버)
+Model Context Protocol (MCP) 서버와 클라이언트를 구축하기 위한 Python 프레임워크입니다.
 
-**Key Components:**
-- `Agent`: Individual agent with role and capabilities
-- `Task`: Work to be performed by agents
-- `Crew`: Collection of agents working together
-- `LLM`: Language model wrapper
-- `Process`: Execution strategy (sequential/hierarchical)
+**주요 구성 요소:**
+- `FastMCP`: MCP 서버 클래스
+- `@server.tool()`: 도구 등록 데코레이터
+- `server.run()`: 서버 실행 메서드
+- `stdio` transport: 표준 입출력을 통한 통신
 
-**Usage Pattern:**
+**사용 패턴:**
 ```python
-from crewai import Agent, Crew, LLM, Task, Process
+from mcp.server import FastMCP
 
-model = LLM(model="vertex_ai/gemini-2.5-flash-lite")
-agent = Agent(role="Specialist", goal="...", tools=[tool], llm=model)
-task = Task(description="...", agent=agent, expected_output="...")
-crew = Crew(tasks=[task], agents=[agent], process=Process.sequential)
+server = FastMCP(name="web-search-server")
 
-response = crew.kickoff(inputs={"key": "value"})
+@server.tool()
+def web_search(query: str, count: int = 5) -> str:
+    """웹 검색을 수행합니다."""
+    # 검색 로직 구현
+    return search_results
+
+if __name__ == "__main__":
+    server.run(transport="stdio")
 ```
 
-### Vertex AI Integration
-Google Cloud's AI platform integration.
+### Vertex AI 통합
+Google Cloud의 AI 플랫폼 통합입니다.
 
-**Components:**
-- `ChatVertexAI`: LangChain Vertex AI integration
-- `vertexai.agent_engines`: Agent Engine deployment
-- `vertexai.preview.reasoning_engines`: ADK app wrapper
-- `litellm`: Universal LLM interface (used by CrewAI)
+**구성 요소:**
+- `ChatVertexAI`: LangChain Vertex AI 통합
+- `vertexai.agent_engines`: Agent Engine 배포
+- `vertexai.preview.reasoning_engines`: ADK 앱 래퍼
 
-**Usage Pattern:**
+**사용 패턴:**
 ```python
-# Direct Vertex AI
+# 직접 Vertex AI
 import vertexai
 from vertexai import agent_engines
 from vertexai.preview import reasoning_engines
@@ -117,92 +119,92 @@ vertexai.init(project=PROJECT_ID, location=LOCATION, staging_bucket=BUCKET)
 adk_app = reasoning_engines.AdkApp(agent=root_agent)
 remote_app = agent_engines.create(agent_engine=adk_app)
 
-# LangChain integration
+# LangChain 통합
 from langchain_google_vertexai import ChatVertexAI
 model = ChatVertexAI(model="gemini-2.5-flash-lite", project=PROJECT_ID, location=LOCATION)
-
-# CrewAI integration  
-import litellm
-litellm.vertex_project = PROJECT_ID
-litellm.vertex_location = LOCATION
-model = LLM(model="vertex_ai/gemini-2.5-flash-lite")
 ```
 
-### Gradio (`gradio>=5.38.2`)
-Web UI framework for machine learning applications.
+### Starlette (`starlette>=0.27.0`)
+ASGI 웹 프레임워크로, A2A 프로토콜 서버와 웹 UI를 구현하는 데 사용됩니다.
 
-**Key Components:**
-- `gr.ChatInterface`: Chat interface for conversational agents
-- `gr.ChatMessage`: Individual chat message with metadata
-- Streaming support for real-time responses
+**주요 구성 요소:**
+- `Starlette`: ASGI 애플리케이션 클래스
+- `Route`: URL 라우팅
+- `JSONResponse`: JSON 응답
+- `HTMLResponse`: HTML 응답
 
-**Usage Pattern:**
+**사용 패턴:**
 ```python
-import gradio as gr
+from starlette.applications import Starlette
+from starlette.routing import Route
+from starlette.responses import JSONResponse, HTMLResponse
 
-async def get_response_from_agent(message: str, history: List[Dict[str, Any]]) -> str:
-    # Process message and return response
-    yield gr.ChatMessage(role="assistant", content=response)
+async def chat_endpoint(request):
+    data = await request.json()
+    # 메시지 처리 로직
+    return JSONResponse({"reply": response})
 
-demo = gr.ChatInterface(
-    get_response_from_agent,
-    title="Agent Interface",
-    type="messages"
-)
-demo.launch(server_name="0.0.0.0", server_port=8080)
+routes = [
+    Route("/chat", chat_endpoint, methods=["POST"]),
+    Route("/", lambda r: HTMLResponse(html_content))
+]
+
+app = Starlette(routes=routes)
 ```
 
-## Project-Specific Modules
+## 프로젝트별 모듈
 
-### Job Agent (Standalone)
-The `job-agent/` package is a self-contained A2A-compatible service that exposes:
-- A2A Agent Card for discovery
-- A2A message endpoints for programmatic interaction
-- A simple built-in web chat UI at the service root for human testing
+### Job Agent (독립 실행형)
+`job-agent/` 패키지는 A2A 호환 서비스로 다음을 노출합니다:
+- A2A Agent Card (발견용)
+- 프로그래밍 방식 상호작용을 위한 A2A 메시지 엔드포인트
+- 사람이 테스트할 수 있는 서비스 루트의 간단한 내장 웹 채팅 UI
 
-Key files:
-- `job-agent/__main__.py`: A2A server entrypoint and web UI routes
-- `job-agent/agent.py`: LangGraph-based agent using Vertex AI `ChatVertexAI`
-- `job-agent/agent_executor.py`: Bridges A2A requests to the agent
+주요 파일:
+- `job-agent/__main__.py`: A2A 서버 진입점 및 웹 UI 라우트
+- `job-agent/agent.py`: Vertex AI `ChatVertexAI`를 사용하는 LangGraph 기반 에이전트
+- `job-agent/agent_executor.py`: A2A 요청을 에이전트로 연결
+- `job-agent/web_search_server.py`: MCP 웹 검색 서버
 
-Dependencies (subset):
-- `a2a-sdk[http-server]`: A2A HTTP server (Starlette)
-- `langgraph`, `langchain-google-vertexai`: Agent + Gemini (Vertex AI)
-- `uvicorn`, `starlette`, `sse-starlette`: Web serving + streaming
+의존성 (일부):
+- `a2a-sdk[http-server]`: A2A HTTP 서버 (Starlette)
+- `langgraph`, `langchain-google-vertexai`: 에이전트 + Gemini (Vertex AI)
+- `uvicorn`, `starlette`, `sse-starlette`: 웹 서빙 + 스트리밍
+- `mcp`, `ddgs`: MCP 서버 및 웹 검색
 
-Endpoints exposed:
+노출된 엔드포인트:
 - `GET /.well-known/agent.json`: A2A Agent Card (well-known discovery)
-- `POST /message/send`: A2A non-streaming message
-- `POST /message/stream`: A2A streaming message (SSE)
-- `GET /`: Minimal web chat UI (human testing)
-- `POST /chat`: Simple JSON chat endpoint used by the UI
+- `POST /message/send`: A2A 비스트리밍 메시지
+- `POST /message/stream`: A2A 스트리밍 메시지 (SSE)
+- `GET /`: 최소한의 웹 채팅 UI (사람 테스트용)
+- `POST /chat`: UI에서 사용하는 간단한 JSON 채팅 엔드포인트
 
-Code flow summary:
-1. `__main__.py` creates `AgentCard` and `A2AStarletteApplication` with `DefaultRequestHandler(JobAgentExecutor)`, then builds the Starlette `app`.
-2. The file mounts two extra routes for the web UI: `GET /` returns HTML; `POST /chat` calls the agent directly.
-3. `JobAgentExecutor.execute(...)` receives the user message from A2A, calls `JobAgent.invoke(...)`, then enqueues a completed task with a text artifact.
-4. `JobAgent` (LangGraph) constructs a ReAct agent with `ChatVertexAI(model="gemini-2.5-flash-lite")` and a `search_jobs` tool for career assistance. It runs, then returns the final message content.
+코드 흐름 요약:
+1. `__main__.py`는 `AgentCard`와 `DefaultRequestHandler(JobAgentExecutor)`를 사용하여 `A2AStarletteApplication`을 생성한 후 Starlette `app`을 빌드합니다.
+2. 파일은 웹 UI를 위한 두 개의 추가 라우트를 마운트합니다: `GET /`는 HTML을 반환하고, `POST /chat`은 에이전트를 직접 호출합니다.
+3. `JobAgentExecutor.execute(...)`는 A2A에서 사용자 메시지를 받아 `JobAgent.invoke(...)`를 호출한 후 텍스트 아티팩트가 포함된 완료된 작업을 큐에 넣습니다.
+4. `JobAgent` (LangGraph)는 `ChatVertexAI(model="gemini-2.5-flash-lite")`와 커리어 지원을 위한 `search_jobs` 및 `web_search` 도구를 사용하여 ReAct 에이전트를 구성합니다. 실행 후 최종 메시지 내용을 반환합니다.
 
-UX flow summary (web UI):
-1. User opens `GET /` (root). The page loads a minimal chat interface.
-2. On send, the browser posts JSON to `POST /chat` with `{ text, contextId }`.
-3. The server calls `JobAgent.invoke(text, contextId)` and returns `{ reply }`.
-4. The UI appends user and agent bubbles; errors are shown inline if the call fails.
+UX 흐름 요약 (웹 UI):
+1. 사용자가 `GET /` (루트)를 엽니다. 페이지는 최소한의 채팅 인터페이스를 로드합니다.
+2. 전송 시 브라우저는 `{ text, contextId }`와 함께 `POST /chat`에 JSON을 게시합니다.
+3. 서버는 `JobAgent.invoke(text, contextId)`를 호출하고 `{ reply }`를 반환합니다.
+4. UI는 사용자 및 에이전트 버블을 추가합니다. 호출이 실패하면 오류가 인라인으로 표시됩니다.
 
-Environment variables:
-- `GOOGLE_CLOUD_PROJECT` (required)
-- `GOOGLE_CLOUD_LOCATION` (e.g., `us-central1`) (required)
-- `HOST_OVERRIDE` (optional; used to publish external URL in the Agent Card, e.g., Cloud Run URL)
+환경 변수:
+- `GOOGLE_CLOUD_PROJECT` (필수)
+- `GOOGLE_CLOUD_LOCATION` (예: `us-central1`) (필수)
+- `HOST_OVERRIDE` (선택사항; Agent Card에서 외부 URL을 게시하는 데 사용, 예: Cloud Run URL)
 
-Local run pattern:
+로컬 실행 패턴:
 ```bash
 cd job-agent
 uv sync
 uv run . --host 0.0.0.0 --port 8080
-# Open http://localhost:8080
+# http://localhost:8080 열기
 ```
 
-Cloud Run deployment (example):
+Cloud Run 배포 (예시):
 ```bash
 gcloud run deploy job-agent \
   --source ./job-agent \
@@ -214,40 +216,18 @@ URL=$(gcloud run services describe job-agent --region us-central1 --format='valu
 gcloud run services update job-agent --region us-central1 --update-env-vars HOST_OVERRIDE=$URL
 ```
 
-### `purchasing_concierge/purchasing_agent.py`
-Main orchestrating agent that coordinates remote seller agents.
+### `job-agent/agent_executor.py`
+A2A 프로토콜 요청을 JobAgent로 연결하는 브리지 역할을 합니다.
 
-**Key Methods:**
-- `create_agent()`: Creates ADK agent with tools and callbacks
-- `before_agent_callback()`: Initializes A2A connections to remote agents
-- `send_task()`: Sends tasks to specific remote agents via A2A
-- `list_remote_agents()`: Discovers available remote agents
+**주요 메서드:**
+- `execute()`: A2A 요청을 받아 JobAgent를 호출하고 결과를 반환합니다
+- `__init__()`: JobAgent 인스턴스를 초기화합니다
 
-**Dependencies:**
+**패턴:**
 ```python
-from google.adk import Agent
-from a2a.client import A2ACardResolver
-from a2a.types import AgentCard, SendMessageRequest, MessageSendParams
-```
-
-### `purchasing_concierge/remote_agent_connection.py`  
-Wrapper for A2A client connections to remote agents.
-
-**Key Class:**
-```python
-class RemoteAgentConnections:
-    def __init__(self, agent_card: AgentCard, agent_url: str)
-    async def send_message(self, message_request: SendMessageRequest) -> SendMessageResponse
-```
-
-### Remote Agent Executors
-Each remote agent has an executor that bridges A2A protocol with agent logic.
-
-**Pattern:**
-```python
-class [Agent]Executor(AgentExecutor):
+class JobAgentExecutor(AgentExecutor):
     def __init__(self):
-        self.agent = [SpecificAgent]()
+        self.agent = JobAgent()
     
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         query = context.get_user_input()
@@ -257,100 +237,98 @@ class [Agent]Executor(AgentExecutor):
         await event_queue.enqueue_event(completed_task(...))
 ```
 
-### Agent Implementations
+### 에이전트 구현
 
-#### `pizza_agent/agent.py` - LangGraph Implementation
-- Uses `create_react_agent` with `create_pizza_order` tool
-- Maintains conversation memory with `MemorySaver`
-- Structured system instructions for pizza ordering
+#### `job-agent/agent.py` - LangGraph 구현
+- `create_react_agent`와 `search_jobs`, `web_search` 도구를 사용합니다
+- `MemorySaver`로 대화 메모리를 유지합니다
+- 커리어 및 구직 지원을 위한 구조화된 시스템 지침을 포함합니다
+- 한국어 시스템 프롬프트로 현지화되어 있습니다
 
-#### `burger_agent/agent.py` - CrewAI Implementation  
-- Uses CrewAI's `Agent`, `Task`, `Crew` pattern
-- Single agent with `create_burger_order` tool
-- Template-based task instructions
+## 도구 패턴
 
-#### `job_agent/agent.py` - Misconfigured Implementation
-- **Issue**: Contains pizza agent logic instead of job logic
-- **Problem**: Uses `create_pizza_order` tool for job agent
-- **Fix Needed**: Should implement job-specific functionality
-
-## Tool Patterns
-
-### Order Creation Tools
-All agents follow similar tool patterns for order creation:
+### 구직 및 웹 검색 도구
+Job Agent는 구직 지원과 웹 검색을 위한 도구 패턴을 따릅니다:
 
 ```python
 from pydantic import BaseModel
-from langchain_core.tools import tool  # LangGraph
-from crewai.tools import tool          # CrewAI
+from langchain_core.tools import tool
 
-class OrderItem(BaseModel):
-    name: str
-    quantity: int 
-    price: int
+class JobRecommendation(BaseModel):
+    job_id: str
+    title: str
+    company: str
+    location: str
+    salary_range: str
+    description: str
+    requirements: list[str]
 
-class Order(BaseModel):
-    order_id: str
-    status: str
-    order_items: list[OrderItem]
+class JobSearchResult(BaseModel):
+    search_id: str
+    query: str
+    recommendations: list[JobRecommendation]
+    total_found: int
 
 @tool
-def create_[product]_order(order_items: list[OrderItem]) -> str:
-    order_id = str(uuid.uuid4())
-    order = Order(order_id=order_id, status="created", order_items=order_items)
-    return f"Order {order.model_dump()} has been created"
+def search_jobs(query: str, location: str = "Remote", experience_level: str = "Entry") -> str:
+    """주어진 기준에 따라 구직 기회를 검색합니다."""
+    # 구직 검색 로직 구현
+    return f"'{query}'에 대한 {total_found}개의 구직 기회를 찾았습니다."
+
+@tool
+def web_search(query: str, count: int = 5) -> str:
+    """웹 검색을 수행하고 상위 결과를 반환합니다."""
+    # DuckDuckGo를 사용한 웹 검색 구현
+    return formatted_search_results
 ```
 
-## HTTP/API Layers
+## HTTP/API 레이어
 
-### A2A Protocol Endpoints
-Each remote agent exposes A2A protocol endpoints via `A2AStarletteApplication`:
+### A2A 프로토콜 엔드포인트
+Job Agent는 `A2AStarletteApplication`을 통해 A2A 프로토콜 엔드포인트를 노출합니다:
 
-- `GET /`: Returns agent card (capabilities, skills, metadata)
-- `POST /send_message`: Accepts A2A message requests
-- WebSocket support for streaming responses
+- `GET /.well-known/agent.json`: 에이전트 카드 반환 (기능, 기술, 메타데이터)
+- `POST /message/send`: A2A 메시지 요청 수락
+- `POST /message/stream`: 스트리밍 응답을 위한 SSE 지원
 
-### Gradio Interface  
-The main UI exposes a chat interface that:
-- Connects to deployed Agent Engine
-- Streams responses from purchasing agent
-- Formats tool calls and responses with metadata
+### 웹 채팅 인터페이스
+내장된 웹 UI는 다음 기능을 제공합니다:
+- 루트 `/`에서 간단한 채팅 인터페이스 제공
+- `POST /chat` 엔드포인트를 통한 JSON 기반 메시지 처리
+- 실시간 응답 및 오류 처리
 
-### Cloud Run Deployment
-Each component runs as a containerized service:
-- Remote agents: Individual Cloud Run services
-- Purchasing agent: Deployed to Vertex AI Agent Engine
-- UI: Can run locally or be deployed separately
+### Cloud Run 배포
+Job Agent는 컨테이너화된 서비스로 실행됩니다:
+- 독립 실행형 Cloud Run 서비스
+- CI/CD 파이프라인을 통한 자동 배포
+- 환경 변수를 통한 설정 관리
 
-## Configuration Patterns
+## 설정 패턴
 
-### Environment Variables
+### 환경 변수
 ```python
-# Common across all components
+# 모든 구성 요소에 공통
 GOOGLE_CLOUD_PROJECT=project-id
 GOOGLE_CLOUD_LOCATION=us-central1  
 GOOGLE_GENAI_USE_VERTEXAI=True
 
-# Purchasing agent specific
-PIZZA_SELLER_AGENT_URL=https://pizza-agent-url
-BURGER_SELLER_AGENT_URL=https://burger-agent-url
-AGENT_ENGINE_RESOURCE_NAME=projects/.../reasoningEngines/...
-
-# Remote agents
-HOST_OVERRIDE=https://external-url  # For agent card URL
-PORT=8080                           # Cloud Run default
+# Job Agent 특정
+HOST_OVERRIDE=https://external-url  # Agent Card URL용
+PORT=8080                           # Cloud Run 기본값
 ```
 
-### Docker Configuration
-All remote agents use similar Dockerfile patterns:
+### Docker 설정
+Job Agent는 다음과 같은 Dockerfile 패턴을 사용합니다:
 ```dockerfile
 FROM python:3.12-slim
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+ADD . /app
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
+RUN uv sync --frozen
 EXPOSE 8080
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["uv", "run", ".", "--host", "0.0.0.0", "--port", "8080"]
 ```
 
-This modular architecture allows for independent development, testing, and deployment of each agent while maintaining standardized communication protocols.
+이 모듈형 아키텍처는 표준화된 통신 프로토콜을 유지하면서 각 에이전트의 독립적인 개발, 테스트 및 배포를 가능하게 합니다.

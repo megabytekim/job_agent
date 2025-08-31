@@ -92,34 +92,35 @@ def search_jobs(query: str, location: str = "Remote", experience_level: str = "E
 
 class JobAgent:
     SYSTEM_INSTRUCTION = """
-# INSTRUCTIONS
+# 지침
 
-You are a specialized career and job search assistant.
-Your purpose is to help users with career advice, job searching, resume tips, interview preparation, and professional development.
-You can provide guidance on various career-related topics and help users find job opportunities.
+당신은 전문적인 커리어 및 취업 상담 어시스턴트입니다.
+사용자의 커리어 조언, 취업 활동, 이력서 팁, 면접 준비, 그리고 전문성 개발을 도와주는 것이 목적입니다.
+다양한 커리어 관련 주제에 대한 가이드를 제공하고 취업 기회를 찾을 수 있도록 도와줍니다.
 
-# CONTEXT
+# 맥락
 
-You can assist with:
-- Job search strategies and techniques
-- Resume writing and optimization
-- Interview preparation and tips
-- Career path guidance
-- Salary negotiation advice
-- Professional development planning
-- Industry insights and trends
-- Networking strategies
+다음과 같은 도움을 제공할 수 있습니다:
+- 취업 전략 및 기법
+- 이력서 작성 및 최적화
+- 면접 준비 및 팁
+- 커리어 경로 가이드
+- 연봉 협상 조언
+- 전문성 개발 계획
+- 업계 인사이트 및 트렌드
+- 네트워킹 전략
 
-# RULES
+# 규칙
 
-- Be professional, encouraging, and supportive in your responses
-- Provide practical, actionable advice
-- When users ask about specific job searches, use the `search_jobs` tool to find relevant opportunities
-- For general web searches related to career topics, use the `web_search` tool to get current information
-- Always consider the user's experience level and career goals
-- Provide personalized recommendations based on their situation
-- If users ask about topics outside of career/job advice, politely redirect them to career-related topics
-- Use a friendly, conversational tone while maintaining professionalism
+- 전문적이고 격려적이며 지지적인 응답을 제공하세요
+- 실용적이고 실행 가능한 조언을 제공하세요
+- 사용자가 구체적인 채용 정보를 요청하면 `search_jobs` 도구를 사용해 관련 기회를 찾아주세요
+- 커리어 관련 일반적인 웹 검색은 `web_search` 도구를 사용해 최신 정보를 제공하세요
+- 항상 사용자의 경험 수준과 커리어 목표를 고려하세요
+- 상황에 맞는 개인화된 추천을 제공하세요
+- 커리어/취업 조언 범위를 벗어난 주제에 대해서는 정중하게 커리어 관련 주제로 안내하세요
+- 전문성을 유지하면서도 친근하고 대화하기 쉬운 톤을 사용하세요
+- 한 번에 하나의 명확한 응답만 제공하세요
 """
     SUPPORTED_CONTENT_TYPES = ["text", "text/plain"]
 
@@ -198,11 +199,22 @@ You can assist with:
 
     def invoke(self, query, sessionId) -> str:
         config = {"configurable": {"thread_id": sessionId}}
-        self.graph.invoke({"messages": [("user", query)]}, config)
-        return self.get_agent_response(config)
-
-    def get_agent_response(self, config):
-        current_state = self.graph.get_state(config)
-        return current_state.values["messages"][-1].content
+        
+        # LangGraph invoke를 통해 응답 생성
+        result = self.graph.invoke({"messages": [("user", query)]}, config)
+        
+        # 마지막 AI 메시지만 반환 (중복 방지)
+        messages = result.get("messages", [])
+        
+        # AI 메시지들 중 마지막 하나만 가져오기
+        ai_messages = [msg for msg in messages if hasattr(msg, 'type') and msg.type == 'ai']
+        if ai_messages:
+            return ai_messages[-1].content
+        
+        # 일반 메시지에서 마지막 하나 가져오기 (fallback)
+        if messages:
+            return messages[-1].content
+            
+        return "죄송합니다. 응답을 생성할 수 없습니다."
 
 

@@ -126,12 +126,17 @@ def main(host, port):
         chat.scrollTop = chat.scrollHeight;
       }
 
+      let isProcessing = false; // 중복 처리 방지 플래그
+
       async function send() {
         const text = input.value.trim();
-        if (!text) return;
+        if (!text || isProcessing) return; // 이미 처리 중이면 무시
+        
+        isProcessing = true; // 처리 시작
         input.value = '';
         btn.disabled = true;
         addMsg(text, 'user');
+        
         try {
           const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, contextId }) });
           if (!res.ok) throw new Error('Request failed');
@@ -142,12 +147,18 @@ def main(host, port):
           addMsg('Error: ' + e.message, 'agent');
         } finally {
           btn.disabled = false;
+          isProcessing = false; // 처리 완료
           input.focus();
         }
       }
 
       btn.addEventListener('click', send);
-      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+      input.addEventListener('keydown', (e) => { 
+        if (e.key === 'Enter') {
+          e.preventDefault(); // 기본 Enter 동작 방지
+          send(); 
+        }
+      });
       input.focus();
     </script>
   </body>
